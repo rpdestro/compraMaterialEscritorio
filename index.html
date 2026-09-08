@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Renato Pinheiro Destro">
+  <title>Controle de Materiais</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Substituição da biblioteca para suportar estilização no Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">
+    <h1>Controle de Materiais e Suprimentos</h1>
+    <p>Planejamento e Orçamento | V1.5</p>
+  </div>
+  <div class="dashboard" id="dashBoard" data-testid="dashboard-summary">
+    <div class="dash-card">Total<br><span id="dashTotal" data-testid="dash-total">0</span></div>
+    <div class="dash-card" style="color:var(--success)">Entregues<br><span id="dashEntregues" data-testid="dash-delivered">0</span></div>
+    <div class="dash-card" style="color:var(--danger)">Atrasados<br><span id="dashAtrasados" data-testid="dash-late">0</span></div>
+    <div class="dash-card" style="color:var(--warning)">Pendentes<br><span id="dashPendentes" data-testid="dash-pending">0</span></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <button class="btn btn-primary" id="btnOpen" title="Carregar planilha original (Substitui dados atuais)" data-testid="btn-open-file">Abrir</button>
+  <button class="btn btn-accent" id="btnSave" disabled title="Salvar base completa no arquivo original" data-testid="btn-save-file">Salvar (Ctrl+S)</button>
+  <button class="btn" id="btnMerge" disabled title="Importar arquivo e mesclar aos dados atuais" data-testid="btn-merge-file">Mesclar</button>
+  <div class="divider"></div>
+  
+  <button class="btn" id="btnNew" disabled title="Novo registro (Ctrl+N)" data-testid="btn-new-record">Novo</button>
+  <button class="btn" id="btnColumns" disabled data-testid="btn-config-columns">Colunas</button>
+  <button class="btn" id="btnHistory" disabled data-testid="btn-history">Histórico</button>
+  <div class="divider"></div>
+
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="text" id="globalSearch" placeholder="Buscar em tudo…" disabled class="standard-input" style="padding-left:30px;" data-testid="input-global-search">
+  </div>
+  <button class="btn" id="btnClearFilters" disabled title="Limpar filtros da busca" data-testid="btn-clear-filters">Limpar Filtros</button>
+  <button class="btn" id="btnExportFiltered" disabled title="Exportar apenas o que está visível na tela" data-testid="btn-export-filtered">Exportar Visíveis</button>
+
+  <div class="file-controls">
+    <select id="sheetSelect" class="sheet-select" style="display:none;" data-testid="select-sheet"></select>
+    <button class="btn btn-icon" id="btnTheme" title="Alternar Modo Escuro" data-testid="btn-toggle-theme">🌙</button>
+    <div class="status-indicator">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText" data-testid="status-text">Nenhum arquivo</span>
+    </div>
+  </div>
+</div>
+
+<div class="bulk-bar" id="bulkBar" data-testid="bulk-action-bar">
+  <span id="bulkCount" data-testid="bulk-count">0 selecionados</span>
+  <button class="btn btn-danger" id="btnBulkDelete" data-testid="btn-bulk-delete">Excluir Selecionados</button>
+  <button class="btn" id="btnBulkEdit" data-testid="btn-bulk-edit">Editar em Massa</button>
+</div>
+
+<input type="file" id="fileInput" accept=".xls,.xlsx,.xlsm,.csv" style="display:none" data-testid="hidden-file-input">
+<input type="file" id="fileMergeInput" accept=".xls,.xlsx,.xlsm,.csv" style="display:none" data-testid="hidden-merge-input">
+
+<div class="table-container" id="tableScroll">
+  <table class="grid" id="grid" data-testid="data-grid">
+    <thead><tr id="headRow"></tr></thead>
+    <tbody id="bodyRows">
+      <tr><td colspan="100%" style="text-align:center; padding:60px; color:var(--ink-soft);">
+        <h3>Bem-vindo ao Controle de Materiais</h3>
+        <p>Clique em <b>Abrir</b> para carregar uma planilha, ou aguarde o auto-save (caso exista).</p>
+      </td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="table-footer" id="tableFooter">
+  <div id="rowCountText" data-testid="row-count">0 registros</div>
+  <div class="pager">
+    <span>Linhas/página:</span>
+    <select id="pageSizeSelect" data-testid="select-page-size">
+      <option value="25">25</option>
+      <option value="50" selected>50</option>
+      <option value="100">100</option>
+      <option value="999999">Todas</option>
+    </select>
+    <button class="page-btn" id="prevPage" title="Anterior" data-testid="btn-prev-page">◀</button>
+    <span id="pageIndicator" data-testid="page-indicator">Página 1</span>
+    <button class="page-btn" id="nextPage" title="Próxima" data-testid="btn-next-page">▶</button>
+  </div>
+</div>
+
+<!-- Modal: Registro -->
+<div class="overlay" id="recordOverlay" data-testid="modal-record">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="recordModalTitle">Registro</h3>
+      <button class="close-modal" data-testid="btn-close-modal">✕</button>
+    </div>
+    <div class="modal-body" id="recordFormFields"></div>
+    <div class="modal-foot">
+      <button class="btn close-modal">Cancelar</button>
+      <button class="btn btn-primary" id="saveRecord" data-testid="btn-save-record">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edição em Massa -->
+<div class="overlay" id="bulkEditOverlay" data-testid="modal-bulk-edit">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head">
+      <h3>Edição em Massa</h3>
+      <button class="close-modal">✕</button>
+    </div>
+    <div class="modal-body single-col">
+      <div class="field">
+        <label>Campo a alterar:</label>
+        <select id="bulkEditField" class="standard-input" data-testid="select-bulk-field"></select>
+      </div>
+      <div class="field">
+        <label>Novo Valor:</label>
+        <input type="text" id="bulkEditValue" class="standard-input" data-testid="input-bulk-value">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn close-modal">Cancelar</button>
+      <button class="btn btn-primary" id="saveBulkEdit" data-testid="btn-save-bulk-edit">Aplicar a Todos</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Configurar Colunas -->
+<div class="overlay" id="configOverlay" data-testid="modal-config-columns">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head">
+      <h3>Configurar Colunas</h3>
+      <button class="close-modal">✕</button>
+    </div>
+    <div class="modal-body single-col" id="colConfigList"></div>
+    <div class="modal-foot">
+      <button class="btn btn-primary close-modal">Concluído</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Histórico -->
+<div class="overlay" id="historyOverlay" data-testid="modal-history">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Histórico de Alterações Locais</h3>
+      <button class="close-modal">✕</button>
+    </div>
+    <div class="modal-body single-col" id="historyList"></div>
+  </div>
+</div>
+
+<!-- Filter Dropdown Panel -->
+<div class="filter-panel" id="filterPanel" data-testid="panel-filter">
+  <div class="fp-dates" id="fpDates" style="display:none;">
+    <label style="font-size:11px;font-weight:600;">Filtrar por período:</label>
+    <input type="date" id="fpDateStart" class="standard-input" data-testid="input-filter-date-start">
+    <input type="date" id="fpDateEnd" class="standard-input" data-testid="input-filter-date-end">
+  </div>
+  <div class="fp-search"><input type="text" class="standard-input" id="fpSearchInput" placeholder="Buscar valor…" data-testid="input-filter-search"></div>
+  <div class="fp-links"><a id="fpMarkAll">Marcar todos</a><a id="fpClearAll">Limpar</a></div>
+  <div class="fp-list" id="fpList"></div>
+  <div class="fp-actions">
+    <button class="btn" id="fpCancel" style="flex:1;">Cancelar</button>
+    <button class="btn btn-primary" id="fpApply" style="flex:1;" data-testid="btn-apply-filter">Aplicar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" data-testid="toast-message"></div>
+
+</body>
+</html>

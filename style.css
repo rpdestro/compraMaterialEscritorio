@@ -5,6 +5,7 @@
   --line: #DAD4C4; --line-soft: #E9E5D9;
   --danger: #A13E3E; --danger-tint: #F5E4E1;
   --success: #3E7A57; --warning: #d97706; --warning-tint: #fef3c7;
+  --info: #0284C7; --info-tint: #E0F2FE;
   --radius: 6px; --shadow: 0 6px 20px rgba(23,50,48,0.14);
   --th-text: var(--primary-dark);
 }
@@ -14,6 +15,7 @@
   --accent: #D4A853; --accent-tint: #403420;
   --line: #3D4A48; --line-soft: #2C3634;
   --danger: #E57373; --danger-tint: #4A2828;
+  --info: #38BDF8; --info-tint: #082F49;
   --shadow: 0 6px 20px rgba(0,0,0,0.5);
   --th-text: #E0E4E3;
 }
@@ -88,9 +90,10 @@ table.grid tbody tr.selected td { background: var(--accent-tint); }
 
 /* Status Pills */
 .status-pill { display: inline-flex; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
-.status-atrasado { background: var(--danger-tint); color: var(--danger); }
-.status-pendente { background: var(--warning-tint); color: var(--warning); }
 .status-entregue { background: var(--primary-tint); color: var(--success); }
+.status-fornecedor, .status-empenhado { background: var(--info-tint); color: var(--info); }
+.status-solicitado { background: var(--warning-tint); color: var(--warning); }
+.status-pendente { background: var(--danger-tint); color: var(--danger); }
 
 /* Checkbox & Actions */
 .col-chk { width: 40px; text-align: center; }

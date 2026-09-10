@@ -3,15 +3,18 @@
  */
 
 const COLS_DEF = [
-  { key: 'codSistema', label: 'Código Sistema' },
-  { key: 'codLimpo', label: 'Código Limpo' },
+  { key: 'codigo', label: 'Código' },
   { key: 'descricao', label: 'Descrição' },
   { key: 'unidade', label: 'Unid. Medida' },
-  { key: 'requisicao', label: 'Requisição' },
-  { key: 'dataRequisicao', label: 'Data Req.', isDate: true },
+  { key: 'ataRegistro', label: 'ATA de Registro' },
+  { key: 'dataAta', label: 'Data ATA', isDate: true },
+  { key: 'solicitacao', label: 'Solicitação' },
+  { key: 'dataSolicitacao', label: 'Data Solicitação', isDate: true },
+  { key: 'pedidoCompra', label: 'Pedido de Compra' },
+  { key: 'dataPedido', label: 'Data Pedido', isDate: true },
   { key: 'empenho', label: 'Empenho' },
-  { key: 'solicFornecimento', label: 'Solic. Fornec.' },
-  { key: 'dataSolicFornecimento', label: 'Data Solicitação', isDate: true },
+  { key: 'solicFornecimento', label: 'Sol. Fornecimento' },
+  { key: 'dataSolicFornecimento', label: 'Data Sol. Fornec.', isDate: true },
   { key: 'dataEntrega', label: 'Data Entrega', isDate: true }
 ];
 
@@ -79,12 +82,9 @@ const Utils = {
   },
   calcStatus(row) {
     if (row.dataEntrega) return { label: 'Entregue', class: 'status-entregue' };
-    if (!row.dataSolicFornecimento) return { label: 'Pendente', class: 'status-pendente' };
-    const reqDate = Utils.parseDateBR(row.dataSolicFornecimento);
-    if (reqDate) {
-      const diffDays = (new Date() - reqDate) / (1000*60*60*24);
-      if (diffDays > 15) return { label: 'Atrasado', class: 'status-atrasado' }; 
-    }
+    if (row.solicFornecimento || row.dataSolicFornecimento) return { label: 'Fornecedor', class: 'status-fornecedor' };
+    if (row.empenho) return { label: 'Empenhado', class: 'status-empenhado' };
+    if (row.pedidoCompra || row.dataPedido || row.solicitacao || row.dataSolicitacao) return { label: 'Solicitado', class: 'status-solicitado' };
     return { label: 'Pendente', class: 'status-pendente' };
   }
 };
@@ -233,10 +233,10 @@ const FileIO = {
 
     const wscols = headerRow.map(label => {
       if (label === 'Descrição') return { wch: 55 };
-      if (label.includes('Código')) return { wch: 16 };
+      if (label.includes('Código') || label.includes('Empenho') || label.includes('ATA') || label.includes('Solicitação')) return { wch: 18 };
       if (label.includes('Data')) return { wch: 14 };
       if (label === 'Status') return { wch: 12 };
-      return { wch: 12 };
+      return { wch: 15 };
     });
     ws['!cols'] = wscols;
 
@@ -374,14 +374,20 @@ const UI = {
 
   updateDashboard(filteredList) {
     const tot = filteredList.length;
-    let entr = 0, atras = 0, pend = 0;
+    let entr = 0, emp = 0, sol = 0, pend = 0;
+    
     filteredList.forEach(r => {
       const s = Utils.calcStatus(r).label;
-      if(s==='Entregue') entr++; else if(s==='Atrasado') atras++; else pend++;
+      if (s === 'Entregue') entr++;
+      else if (s === 'Empenhado' || s === 'Fornecedor') emp++;
+      else if (s === 'Solicitado') sol++;
+      else pend++;
     });
+    
     Utils.$('#dashTotal').textContent = tot;
     Utils.$('#dashEntregues').textContent = entr;
-    Utils.$('#dashAtrasados').textContent = atras;
+    Utils.$('#dashEmpenhados').textContent = emp;
+    Utils.$('#dashSolicitados').textContent = sol;
     Utils.$('#dashPendentes').textContent = pend;
   },
 
@@ -635,10 +641,10 @@ const Modals = {
     if (Store.editingId) {
       const idx = Store.data.findIndex(r => r.id === Store.editingId);
       if(idx > -1) Store.data[idx] = { id: Store.editingId, ...data };
-      Store.addHistory('Edição', `Atualizou registro ${data.codSistema || 'sem código'}`);
+      Store.addHistory('Edição', `Atualizou registro ${data.codigo || 'sem código'}`);
     } else {
       Store.data.push({ id: Utils.uid(), ...data });
-      Store.addHistory('Criação', `Novo registro ${data.codSistema || 'sem código'}`);
+      Store.addHistory('Criação', `Novo registro ${data.codigo || 'sem código'}`);
     }
     Store.setDirty(true);
     this.initialRecordState = data; 

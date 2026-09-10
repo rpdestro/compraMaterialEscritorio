@@ -1,12 +1,12 @@
 # 📦 Controle de Materiais e Suprimentos
 
-Uma aplicação web robusta de Front-End para planejamento, orçamento e controle de materiais, projetada com foco em performance, usabilidade e nos princípios de **Clean Code**.
+Uma aplicação web Front-End para controle de pedidos de materiais, projetada com foco em performance, usabilidade e nos princípios de **Clean Code**.
 
 ## 🚀 Principais Funcionalidades
 
 * **Gestão Integrada de Arquivos:** Importação, mesclagem e exportação direta de planilhas Excel (`.xlsx`, `.xls`, `.csv`) com preservação de estilos e formatação nativa.
-* **Dashboard Interativo:** Acompanhamento dinâmico e em tempo real dos status de suprimentos (Total, Entregues, Atrasados e Pendentes).
-* **Data Grid Avançado:** Tabela de alta performance com paginação, ordenação, reordenação de colunas via *drag-and-drop* e filtros compostos (busca global e por período de datas).
+* **Dashboard Interativo:** Acompanhamento dinâmico e em tempo real dos status de suprimentos (Total, Pendentes, Solicitados, Empenhados e Entregues).
+* **Data Grid Avançado:** Tabela de alta performance com paginação, ordenação, reordenação de colunas via *drag-and-drop* e filtros compostos (busca global e por pedidos de datas).
 * **Operações CRUD \& em Massa:** Inserção, clonagem, edição e exclusão individual ou em lote (Bulk Actions).
 * **Resiliência de Dados:** Sistema de *Auto-save* automático no `localStorage` para prevenção contra perda de dados em caso de fechamento acidental da aba.
 * **Experiência do Usuário (UX):** Suporte nativo à alternância entre Tema Claro e Tema Escuro (*Dark Mode*).

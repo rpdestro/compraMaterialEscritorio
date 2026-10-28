@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="author" content="Renato Pinheiro Destro">
   <title>Controle de Materiais</title>
+  <link rel="icon" type="image/png" href="brasao.png">
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -17,9 +18,12 @@
 <body>
 
 <header class="app-header">
-  <div class="app-title">
-    <h1>Controle de Materiais e Suprimentos</h1>
-    <p>Planejamento e Orçamento | V1.7</p>
+  <div class="app-brand">
+    <img src="brasao.png" alt="Brasão de Botucatu" class="app-brasao" data-testid="img-brasao">
+    <div class="app-title">
+      <h1>Controle de Materiais e Suprimentos</h1>
+      <p>Planejamento e Orçamento | V1.7</p>
+    </div>
   </div>
   <div class="dashboard" id="dashBoard" data-testid="dashboard-summary">
     <div class="dash-card">Total<br><span id="dashTotal" data-testid="dash-total">0</span></div>
@@ -73,7 +77,7 @@
     <tbody id="bodyRows">
       <tr><td colspan="100%" style="text-align:center; padding:60px; color:var(--ink-soft);">
         <h3>Bem-vindo ao Controle de Materiais</h3>
-        <p>Clique em <b>Abrir</b> para carregar uma planilha, ou aguarde o auto-save (caso exista).</p>
+        <p>Clique em <b>Abrir</b> para carregar uma planilha, Os dados ficam salvos automaticamente neste navegador, mesmo se ele for fechado.</p>
       </td></tr>
     </tbody>
   </table>

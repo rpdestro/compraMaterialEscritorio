@@ -43,7 +43,7 @@ const Store = {
   setDirty(val) {
     this.dirty = val;
     UI.updateStatus();
-    if (val) Storage.autoSave();
+    Storage.autoSave();
   },
   
   addHistory(action, detail) {
@@ -90,34 +90,114 @@ const Utils = {
 };
 
 // --- MODULE: Storage & Auto-save ---
+// Persiste a sessão no IndexedDB para sobreviver ao fechamento do browser (inclusive involuntário).
 const Storage = {
-  key: 'matControl_backup',
-  autoSave() {
-    if(!Store.data.length) return;
-    const snap = { data: Store.data, fileName: Store.fileName, history: Store.history };
-    localStorage.setItem(this.key, JSON.stringify(snap));
-  },
-  loadBackup() {
-    const raw = localStorage.getItem(this.key);
-    if (raw) {
-      try {
-        const snap = JSON.parse(raw);
-        if (snap.data && snap.data.length > 0) {
-          if(confirm('Foi encontrado um trabalho não salvo (Auto-save) da sua última sessão. Deseja recuperar?')) {
-            Store.data = snap.data;
-            Store.fileName = snap.fileName || 'backup_recuperado.xlsx';
-            Store.history = snap.history || [];
-            Store.setDirty(true);
-            UI.initTable();
-            Utils.showToast('Backup recuperado.');
-            return true;
-          } else {
-            localStorage.removeItem(this.key);
-          }
-        }
-      } catch(e) { console.error(e); }
+  dbName: 'matControl',
+  storeName: 'session',
+  legacyKey: 'matControl_backup',
+  _db: null,
+  _timer: null,
+
+  open() {
+    if (!this._db) {
+      this._db = new Promise((resolve, reject) => {
+        const req = indexedDB.open(this.dbName, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(this.storeName);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
     }
-    return false;
+    return this._db;
+  },
+  async tx(mode, fn) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const t = db.transaction(this.storeName, mode);
+      const req = fn(t.objectStore(this.storeName));
+      t.oncomplete = () => resolve(req.result);
+      t.onerror = () => reject(t.error);
+    });
+  },
+  get(key) { return this.tx('readonly', s => s.get(key)); },
+  put(key, val) { return this.tx('readwrite', s => s.put(val, key)); },
+
+  snapshot() {
+    const filters = {};
+    Object.keys(Store.filters).forEach(k => {
+      const f = Store.filters[k];
+      filters[k] = f.type === 'set' ? { type: 'set', values: [...f.values] } : f;
+    });
+    return {
+      data: Store.data, fileName: Store.fileName, history: Store.history, dirty: Store.dirty,
+      sheetNames: Store.sheetNames, currentSheet: Store.currentSheet,
+      visibleCols: Store.visibleCols, sortKey: Store.sortKey, sortAsc: Store.sortAsc,
+      pageSize: Store.pageSize, search: Store.search, filters
+    };
+  },
+
+  autoSave() {
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => this.saveNow(), 300);
+  },
+  saveNow() {
+    clearTimeout(this._timer);
+    if (!Store.data.length && !Store.fileName) return;
+    return this.put('state', this.snapshot()).catch(e => console.error('Falha no auto-save', e));
+  },
+  // Guarda o arquivo original (para troca de abas) e o handle (para salvar direto no disco após reabrir)
+  saveWorkbook(buffer) {
+    return this.put('workbook', buffer).catch(e => console.error(e));
+  },
+  saveHandle() {
+    return this.put('handle', Store.fileHandle || null).catch(e => console.error(e));
+  },
+
+  async restore() {
+    let snap = null;
+    try { snap = await this.get('state'); } catch (e) { console.error(e); }
+
+    // Migração do backup antigo (localStorage)
+    const legacy = localStorage.getItem(this.legacyKey);
+    if (legacy) {
+      try {
+        if (!snap) {
+          const old = JSON.parse(legacy);
+          snap = { data: old.data || [], fileName: old.fileName || 'backup_recuperado.xlsx', history: old.history || [], dirty: true };
+        }
+      } catch (e) { console.error(e); }
+      localStorage.removeItem(this.legacyKey);
+    }
+
+    if (!snap || (!(snap.data && snap.data.length) && !snap.fileName)) return false;
+
+    Store.data = snap.data || [];
+    Store.fileName = snap.fileName || null;
+    Store.history = snap.history || [];
+    Store.sheetNames = snap.sheetNames || [];
+    Store.currentSheet = snap.currentSheet || null;
+    if (snap.visibleCols) Store.visibleCols = snap.visibleCols;
+    Store.sortKey = snap.sortKey || null;
+    Store.sortAsc = snap.sortAsc !== false;
+    Store.pageSize = snap.pageSize || Store.pageSize;
+    Store.search = snap.search || '';
+    Store.filters = {};
+    Object.keys(snap.filters || {}).forEach(k => {
+      const f = snap.filters[k];
+      Store.filters[k] = f.type === 'set' ? { type: 'set', values: new Set(f.values) } : f;
+    });
+
+    try {
+      const buffer = await this.get('workbook');
+      if (buffer) Store.wbCache = XLSX.read(buffer, { type: 'array', cellDates: true });
+      Store.fileHandle = (await this.get('handle')) || null;
+    } catch (e) { console.error(e); }
+
+    Utils.$('#globalSearch').value = Store.search;
+    Utils.$('#pageSizeSelect').value = String(Store.pageSize);
+    Store.setDirty(!!snap.dirty);
+    UI.initTable();
+    Utils.showToast('Sessão anterior restaurada.');
+    return true;
   }
 };
 
@@ -129,6 +209,8 @@ const FileIO = {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
         if(!isMerge) {
+          Storage.saveWorkbook(e.target.result);
+          Storage.saveHandle();
           Store.wbCache = wb;
           Store.sheetNames = wb.SheetNames;
           Store.fileName = file.name;
@@ -263,9 +345,17 @@ const FileIO = {
               suggestedName: safeName,
               types: [{ description: 'Planilha Excel', accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']} }]
             });
-            Store.fileName = Store.fileHandle.name; 
+            Store.fileName = Store.fileHandle.name;
+            Storage.saveHandle();
+          } else if (Store.fileHandle.requestPermission) {
+            // Após reabrir o browser, o handle restaurado precisa de nova permissão de escrita
+            const opts = { mode: 'readwrite' };
+            if (await Store.fileHandle.queryPermission(opts) !== 'granted' &&
+                await Store.fileHandle.requestPermission(opts) !== 'granted') {
+              throw new Error('Permissão de escrita negada');
+            }
           }
-          
+
           const writable = await Store.fileHandle.createWritable();
           await writable.write(blob);
           await writable.close();
@@ -273,7 +363,6 @@ const FileIO = {
           Store.setDirty(false);
           Store.addHistory('Salvamento', 'Arquivo salvo diretamente no disco com formatação');
           Utils.showToast('Arquivo atualizado com sucesso!');
-          localStorage.removeItem(Storage.key);
           return;
         } catch (err) {
           if (err.name === 'AbortError') return;
@@ -292,7 +381,6 @@ const FileIO = {
         Store.setDirty(false);
         Store.addHistory('Exportação', 'Base salva em arquivo (Download)');
         Utils.showToast('Download do arquivo concluído!');
-        localStorage.removeItem(Storage.key); 
       } else {
         Utils.showToast('Visão atual exportada!');
       }
@@ -357,7 +445,7 @@ const UI = {
     Utils.$$('.toolbar .btn').forEach(b => b.disabled = false);
     Utils.$('#globalSearch').disabled = false;
     
-    if (Store.sheetNames.length > 1) {
+    if (Store.sheetNames.length > 1 && Store.wbCache) {
       const sel = Utils.$('#sheetSelect');
       sel.innerHTML = Store.sheetNames.map(s => `<option value="${s}" ${s===Store.currentSheet?'selected':''}>Aba: ${s}</option>`).join('');
       sel.style.display = 'block';
@@ -506,6 +594,7 @@ const UI = {
     }
 
     this.attachBodyEvents();
+    Storage.autoSave(); // captura também ordenação, filtros, colunas e paginação
   },
 
   attachBodyEvents() {
@@ -721,7 +810,8 @@ const Modals = {
 
 // --- EVENTS BINDING (Power User & Toolbar) ---
 document.addEventListener('DOMContentLoaded', () => {
-  Storage.loadBackup();
+  Storage.restore();
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
   Modals.init();
 
   Utils.$('#btnTheme').addEventListener('click', () => {
@@ -848,6 +938,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   Utils.$('#fpCancel').addEventListener('click', () => Modals.close(Utils.$('#filterPanel')));
   Utils.$('#fpApply').addEventListener('click', () => Modals.applyFilter());
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') Storage.saveNow();
+  });
 
   window.addEventListener('beforeunload', (e) => {
     if (Store.dirty) { e.preventDefault(); e.returnValue = ''; }
